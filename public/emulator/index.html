@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Neo Geo Emulator</title>
+
+<style>
+html,body{
+margin:0;
+background:black;
+height:100%;
+overflow:hidden;
+}
+
+#game{
+width:100%;
+height:100%;
+}
+</style>
+
+</head>
+
+<body>
+
+<div id="game"></div>
+
+<script>
+
+function getGame(){
+ const params =
+ new URLSearchParams(window.location.search);
+ return params.get("game");
+}
+
+const game = getGame();
+
+EJS_player="#game";
+EJS_core="arcade";
+
+EJS_pathtodata=
+"https://cdn.emulatorjs.org/stable/data/";
+
+EJS_gameUrl=
+"/roms/neogeo/"+game+".zip";
+
+EJS_biosUrl=
+"/bios/neogeo.zip";
+
+EJS_startOnLoaded=true;
+
+</script>
+
+<script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
+
+</body>
+</html>
