@@ -1,0 +1,65 @@
+"use client";
+
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import EmulatorPlayer from '@/src/components/EmulatorPlayer';
+import Navbar from '@/src/components/Navbar';
+import gamesData from '@/src/data/games.json';
+import { ChevronLeft, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+
+function PlayContent() {
+  const searchParams = useSearchParams();
+  const gameSlug = searchParams.get('game');
+  const router = useRouter();
+  
+  const game = gamesData.find(g => g.slug === gameSlug);
+
+  if (!gameSlug || !game) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="w-20 h-20 text-red-500 mb-6" />
+        <h1 className="text-4xl font-black text-white mb-4 italic tracking-tighter">GAME NOT FOUND</h1>
+        <p className="text-zinc-400 mb-8 max-w-md">
+          The requested game mission could not be located in the arcade database.
+        </p>
+        <Link 
+          href="/"
+          className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 py-4 rounded-2xl transition-all"
+        >
+          RETURN TO ARCADE
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen flex flex-col bg-black overflow-hidden">
+      <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">
+          <ChevronLeft className="w-4 h-4" />
+          Back
+        </Link>
+        <div className="flex items-center gap-3">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-white font-black italic tracking-tighter text-sm uppercase">
+            Playing: {game.name}
+          </span>
+        </div>
+        <div className="w-20" /> {/* Spacer */}
+      </div>
+      
+      <div className="flex-1 relative">
+        <EmulatorPlayer gameSlug={game.slug} />
+      </div>
+    </div>
+  );
+}
+
+export default function Play() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white font-black italic">LOADING ARCADE...</div>}>
+      <PlayContent />
+    </Suspense>
+  );
+}

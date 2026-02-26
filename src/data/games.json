@@ -1,0 +1,20 @@
+[
+ {
+   "name": "Metal Slug",
+   "slug": "metal-slug",
+   "rom": "/roms/neogeo/mslug.zip",
+   "image": "https://picsum.photos/seed/mslug/400/600"
+ },
+ {
+   "name": "King of Fighters 98",
+   "slug": "kof98",
+   "rom": "/roms/neogeo/kof98.zip",
+   "image": "https://picsum.photos/seed/kof98/400/600"
+ },
+ {
+   "name": "Samurai Shodown",
+   "slug": "samsho",
+   "rom": "/roms/neogeo/samsho.zip",
+   "image": "https://picsum.photos/seed/samsho/400/600"
+ }
+]
