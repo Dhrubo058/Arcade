@@ -50,16 +50,19 @@ const rom = getParam("rom");
 
 // EmulatorJS Configuration
 window.EJS_player = "#game";
-window.EJS_core = "fbneo"; // Using FBNeo as requested
+window.EJS_core = "fbneo"; // Core set to FBNeo
 window.EJS_gameName = rom ? rom.replace('.zip', '') : "Unknown";
 window.EJS_color = "#10b981";
+window.EJS_startOnLoaded = true;
+
+// Arcade Romset Compatibility Mode
+window.EJS_arcade = true; 
 
 window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
 
+// Load ROM exactly as uploaded
 window.EJS_gameUrl = "/roms/" + rom;
 window.EJS_biosUrl = "/bios/neogeo.zip";
-
-window.EJS_startOnLoaded = true;
 
 // Hide loading text when emulator starts
 window.EJS_onGameStart = function() {
