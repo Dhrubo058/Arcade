@@ -6,15 +6,16 @@ import EmulatorPlayer from '@/src/components/EmulatorPlayer';
 import Navbar from '@/src/components/Navbar';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import socket from '@/src/lib/socket';
 
 function PlayContent() {
   const searchParams = useSearchParams();
   const rom = searchParams.get('rom');
+  const roomId = searchParams.get('room');
   const router = useRouter();
   
   const [romExists, setRomExists] = useState<boolean | null>(null);
   
-  // Generate game object from the rom filename
   const game = rom ? {
     name: rom.split('/').pop()?.replace('.zip', '').split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'Unknown Game',
     filename: rom,
@@ -28,7 +29,39 @@ function PlayContent() {
         .then(res => setRomExists(res.ok))
         .catch(() => setRomExists(false));
     }
-  }, [rom]);
+
+    if (roomId) {
+      if (!socket.connected) socket.connect();
+
+      socket.on('player-input', ({ playerIndex, input, state }) => {
+        console.log(`Player ${playerIndex} input: ${input} ${state}`);
+        
+        // Dispatch keyboard event to the emulator
+        const eventType = state === 'down' ? 'keydown' : 'keyup';
+        const event = new KeyboardEvent(eventType, {
+          key: input,
+          code: input,
+          bubbles: true,
+        });
+        
+        // Try to dispatch to both window and emulator frame
+        window.dispatchEvent(event);
+        const iframe = document.getElementById('emulator-frame') as HTMLIFrameElement;
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.dispatchEvent(event);
+        }
+      });
+
+      socket.on('room-closed', () => {
+        router.push('/');
+      });
+
+      return () => {
+        socket.off('player-input');
+        socket.off('room-closed');
+      };
+    }
+  }, [rom, roomId, router]);
 
   if (!rom || !game) {
     return (
