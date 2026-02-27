@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface EmulatorPlayerProps {
-  gameSlug: string;
+  rom: string;
 }
 
-export default function EmulatorPlayer({ gameSlug }: EmulatorPlayerProps) {
+export default function EmulatorPlayer({ rom }: EmulatorPlayerProps) {
   const [error, setError] = useState<string | null>(null);
 
   const handleReload = () => {
@@ -18,7 +18,7 @@ export default function EmulatorPlayer({ gameSlug }: EmulatorPlayerProps) {
     <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
       <iframe
         id="emulator-frame"
-        src={`/emulator/index.html?game=${gameSlug}`}
+        src={`/emulator/index.html?rom=${rom}`}
         className="w-full h-full border-none"
         allowFullScreen
         onLoad={() => console.log('Emulator loaded')}

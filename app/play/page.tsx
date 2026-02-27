@@ -4,35 +4,33 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import EmulatorPlayer from '@/src/components/EmulatorPlayer';
 import Navbar from '@/src/components/Navbar';
-import gamesData from '@/src/data/games.json';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 function PlayContent() {
   const searchParams = useSearchParams();
-  const gameSlug = searchParams.get('game');
+  const rom = searchParams.get('rom');
   const router = useRouter();
   
   const [romExists, setRomExists] = useState<boolean | null>(null);
   
-  // Find game in metadata, or create a virtual game object from the slug
-  const metadata = gamesData.find(g => g.slug === gameSlug);
-  const game = metadata || (gameSlug ? {
-    name: gameSlug.split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-    slug: gameSlug,
-    rom: `/roms/neogeo/${gameSlug}.zip`
-  } : null);
+  // Generate game object from the rom filename
+  const game = rom ? {
+    name: rom.split('/').pop()?.replace('.zip', '').split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'Unknown Game',
+    filename: rom,
+    rom: `/roms/${rom}`
+  } : null;
 
   useEffect(() => {
-    if (gameSlug) {
-      const romPath = `/roms/neogeo/${gameSlug}.zip`;
+    if (rom) {
+      const romPath = `/roms/${rom}`;
       fetch(romPath, { method: 'HEAD' })
         .then(res => setRomExists(res.ok))
         .catch(() => setRomExists(false));
     }
-  }, [gameSlug]);
+  }, [rom]);
 
-  if (!gameSlug || !game) {
+  if (!rom || !game) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
         <AlertCircle className="w-20 h-20 text-red-500 mb-6" />
@@ -57,7 +55,7 @@ function PlayContent() {
         <h1 className="text-4xl font-black text-white mb-4 italic tracking-tighter">GAME ROM NOT FOUND</h1>
         <p className="text-zinc-400 mb-8 max-w-md">
           The ROM file for <span className="text-white font-bold">{game.name}</span> is missing from the server. 
-          Please ensure <code className="bg-zinc-900 px-2 py-1 rounded text-emerald-400">/public/roms/neogeo/{gameSlug}.zip</code> exists.
+          Please ensure <code className="bg-zinc-900 px-2 py-1 rounded text-emerald-400">/public/roms/{rom}</code> exists.
         </p>
         <Link 
           href="/"
@@ -94,7 +92,7 @@ function PlayContent() {
       </div>
       
       <div className="flex-1 relative">
-        <EmulatorPlayer gameSlug={game.slug} />
+        <EmulatorPlayer rom={rom} />
       </div>
     </div>
   );

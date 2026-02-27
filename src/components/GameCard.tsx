@@ -9,16 +9,16 @@ import { useState } from 'react';
 interface GameCardProps {
   game: {
     name: string;
+    filename: string;
     slug: string;
-    rom: string;
   };
 }
 
 export default function GameCard({ game }: GameCardProps) {
   const [imageError, setImageError] = useState(false);
   
-  // Extract ROM filename (e.g., /roms/neogeo/mslug.zip -> mslug)
-  const romFilename = game.rom.split('/').pop()?.replace('.zip', '') || game.slug;
+  // Extract ROM filename (e.g., mslug.zip -> mslug)
+  const romFilename = game.filename.split('/').pop()?.replace('.zip', '') || game.slug;
   
   // Construct automatic image path (assuming images are named after ROMs)
   const imagePath = `/images/games/${romFilename}.png`;
@@ -47,7 +47,7 @@ export default function GameCard({ game }: GameCardProps) {
         
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-[2px]">
           <Link 
-            href={`/play?game=${game.slug}`}
+            href={`/play?rom=${game.filename}`}
             className="bg-emerald-500 hover:bg-emerald-400 text-black font-black p-4 rounded-full transform scale-75 group-hover:scale-100 transition-all duration-300 shadow-[0_0_20px_rgba(16,185,129,0.4)] z-10"
           >
             <Play className="w-6 h-6 fill-current" />

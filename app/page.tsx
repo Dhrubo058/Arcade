@@ -1,37 +1,47 @@
 import Navbar from '@/src/components/Navbar';
 import GameCard from '@/src/components/GameCard';
-import gamesData from '@/src/data/games.json';
 import fs from 'fs';
 import path from 'path';
 
 export default async function Home() {
   // Automatic ROM detection
-  const romsDir = path.join(process.cwd(), 'public', 'roms', 'neogeo');
+  const romsDir = path.join(process.cwd(), 'public', 'roms');
   let detectedGames = [];
+
+  const scanRoms = (dir: string) => {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const fullPath = path.join(dir, file);
+      const stat = fs.statSync(fullPath);
+      
+      if (stat.isDirectory()) {
+        scanRoms(fullPath);
+      } else if (file.endsWith('.zip') && file !== 'neogeo.zip') {
+        const relativePath = path.relative(path.join(process.cwd(), 'public', 'roms'), fullPath);
+        const filename = file.replace('.zip', '');
+        
+        // Generate name from filename: replace - and _ with space, capitalize words
+        const name = filename
+          .split(/[-_]/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+
+        detectedGames.push({
+          name: name,
+          filename: relativePath,
+          slug: filename // keeping slug for key prop
+        });
+      }
+    }
+  };
 
   try {
     if (fs.existsSync(romsDir)) {
-      const files = fs.readdirSync(romsDir);
-      const romFiles = files.filter(file => file.endsWith('.zip') && file !== 'neogeo.zip');
-
-      detectedGames = romFiles.map(file => {
-        const slug = file.replace('.zip', '');
-        // Check if we have metadata for this ROM in our games.json
-        const metadata = gamesData.find(g => g.slug === slug || g.rom.endsWith(file));
-        
-        return {
-          name: metadata?.name || slug.split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
-          slug: slug,
-          rom: `/roms/neogeo/${file}`
-        };
-      });
+      scanRoms(romsDir);
     }
   } catch (error) {
     console.error('Error scanning ROMs directory:', error);
   }
-
-  // Fallback to gamesData if no ROMs detected (for demo/initial state)
-  const finalGames = detectedGames.length > 0 ? detectedGames : gamesData;
 
   return (
     <div className="min-h-screen bg-zinc-950">
@@ -48,7 +58,7 @@ export default async function Home() {
             <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-                {finalGames.length} ROMs Detected
+                {detectedGames.length} ROMs Detected
               </span>
             </div>
           </div>
@@ -57,15 +67,15 @@ export default async function Home() {
           </p>
         </header>
 
-        {finalGames.length > 0 ? (
+        {detectedGames.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {finalGames.map((game) => (
-              <GameCard key={game.slug} game={game} />
+            {detectedGames.map((game) => (
+              <GameCard key={game.filename} game={game} />
             ))}
           </div>
         ) : (
           <div className="py-20 text-center border-2 border-dashed border-zinc-800 rounded-3xl">
-            <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">No ROMs detected in /public/roms/neogeo/</p>
+            <p className="text-zinc-500 font-mono text-sm uppercase tracking-widest">No games found. Upload ROMs to /public/roms</p>
             <p className="text-zinc-600 text-xs mt-2">Add .zip files to start playing</p>
           </div>
         )}
@@ -85,7 +95,7 @@ export default async function Home() {
                 </li>
                 <li className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Game ROMs in /public/roms/neogeo/
+                  Game ROMs in /public/roms/
                 </li>
                 <li className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
