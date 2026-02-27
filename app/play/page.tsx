@@ -14,7 +14,14 @@ function PlayContent() {
   const router = useRouter();
   
   const [romExists, setRomExists] = useState<boolean | null>(null);
-  const game = gamesData.find(g => g.slug === gameSlug);
+  
+  // Find game in metadata, or create a virtual game object from the slug
+  const metadata = gamesData.find(g => g.slug === gameSlug);
+  const game = metadata || (gameSlug ? {
+    name: gameSlug.split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' '),
+    slug: gameSlug,
+    rom: `/roms/neogeo/${gameSlug}.zip`
+  } : null);
 
   useEffect(() => {
     if (gameSlug) {
