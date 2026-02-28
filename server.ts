@@ -1,13 +1,14 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import next from 'next';
+import Next from 'next';
 import { parse } from 'url';
 
 console.log('Starting custom server...');
 
 const dev = process.env.NODE_ENV !== 'production';
-const app = next({ dev });
+// @ts-ignore - next is callable but TS with NodeNext can be picky about default exports
+const app = (Next.default || Next)({ dev });
 const handle = app.getRequestHandler();
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
@@ -34,6 +35,27 @@ server.get('/health', (req, res) => {
 
 // Room state management
 const rooms = new Map();
+
+// Periodic cleanup to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [roomId, room] of rooms.entries()) {
+    // Remove rooms with no players
+    if (!room.players || room.players.length === 0) {
+      console.log(`[CLEANUP] Removing empty room: ${roomId}`);
+      rooms.delete(roomId);
+      continue;
+    }
+
+    // Verify host is still connected
+    const hostSocket = io.sockets.sockets.get(room.host);
+    if (!hostSocket) {
+      console.log(`[CLEANUP] Host disconnected for room ${roomId}, closing...`);
+      io.to(roomId).emit('room-closed');
+      rooms.delete(roomId);
+    }
+  }
+}, 60000);
 
 io.on('connection', (socket) => {
   console.log(`[SERVER] New connection: ${socket.id} from ${socket.handshake.address}`);
@@ -100,8 +122,19 @@ io.on('connection', (socket) => {
     // Broadcast input to the room (host will receive it)
     const room = rooms.get(roomId);
     if (room) {
+      // Validate host is still connected before emitting
+      const hostSocket = io.sockets.sockets.get(room.host);
+      if (!hostSocket) {
+        console.log(`[SERVER] Host for room ${roomId} not found, closing room.`);
+        io.to(roomId).emit('room-closed');
+        rooms.delete(roomId);
+        return;
+      }
+
       const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      io.to(room.host).emit('player-input', { playerIndex, input, state });
+      if (playerIndex !== -1) {
+        io.to(room.host).emit('player-input', { playerIndex, input, state });
+      }
     }
   });
 
