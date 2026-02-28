@@ -14,12 +14,40 @@ export default function RoomPage() {
   const [isHost, setIsHost] = useState(false);
   const [gameSelected, setGameSelected] = useState<any>(null);
   const [appUrl, setAppUrl] = useState('');
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
 
   useEffect(() => {
     setAppUrl(window.location.origin);
     
+    const updateStatus = () => {
+      if (socket.connected) setSocketStatus('connected');
+      else if (socket.active) setSocketStatus('connecting');
+      else setSocketStatus('disconnected');
+    };
+
+    const fetchRoomInfo = () => {
+      socket.emit('get-room-info', roomId, (response: any) => {
+        if (response.success) {
+          setPlayers(response.players);
+          setGameSelected(response.game);
+        } else {
+          router.push('/');
+        }
+      });
+    };
+
+    socket.on('connect', () => {
+      updateStatus();
+      fetchRoomInfo();
+    });
+    socket.on('disconnect', updateStatus);
+    socket.on('connect_error', updateStatus);
+
     if (!socket.connected) {
       socket.connect();
+    } else {
+      updateStatus();
+      fetchRoomInfo();
     }
 
     socket.on('player-joined', (updatedPlayers) => {
@@ -34,8 +62,8 @@ export default function RoomPage() {
       setGameSelected(game);
     });
 
-    socket.on('game-started', () => {
-      router.push(`/play?rom=${gameSelected.filename}&room=${roomId}`);
+    socket.on('game-started', (game) => {
+      router.push(`/play?rom=${game.filename}&room=${roomId}`);
     });
 
     socket.on('room-closed', () => {
@@ -77,6 +105,15 @@ export default function RoomPage() {
           Back to Dashboard
         </button>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1 bg-black/40 border border-zinc-800 rounded-full mr-4">
+            <div className={`w-2 h-2 rounded-full ${
+              socketStatus === 'connected' ? 'bg-emerald-500' : 
+              socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+            }`} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              {socketStatus}
+            </span>
+          </div>
           <div className="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center">
             <Users className="w-5 h-5 text-black" />
           </div>

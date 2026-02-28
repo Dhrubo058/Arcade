@@ -30,9 +30,17 @@ function PlayContent() {
         .then(res => setRomExists(res.ok))
         .catch(() => setRomExists(false));
 
-      // Check for BIOS as well
+      // Check for BIOS as well (try /roms/ then /bios/)
       fetch('/roms/neogeo.zip', { method: 'HEAD' })
-        .then(res => setBiosExists(res.ok))
+        .then(res => {
+          if (res.ok) {
+            setBiosExists(true);
+          } else {
+            fetch('/bios/neogeo.zip', { method: 'HEAD' })
+              .then(res2 => setBiosExists(res2.ok))
+              .catch(() => setBiosExists(false));
+          }
+        })
         .catch(() => setBiosExists(false));
     }
 

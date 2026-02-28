@@ -62,16 +62,37 @@ window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
 
 // Load ROM exactly as uploaded
 window.EJS_gameUrl = "/roms/" + rom;
-window.EJS_biosUrl = "/roms/neogeo.zip"; // Point to /roms/neogeo.zip as it's common for users to put it there
+
+// BIOS Configuration
+// We try to load from /roms/ first, then /bios/ as a fallback.
+// For Neo Geo, neogeo.zip is mandatory.
+window.EJS_biosUrl = "/roms/neogeo.zip"; 
 
 // Hide loading text when emulator starts
 window.EJS_onGameStart = function() {
   document.getElementById('loading').style.display = 'none';
 };
 
-</script>
+// Check if /roms/neogeo.zip exists, if not use /bios/neogeo.zip
+fetch('/roms/neogeo.zip', { method: 'HEAD' })
+  .then(res => {
+    if (!res.ok) {
+      window.EJS_biosUrl = "/bios/neogeo.zip";
+    }
+    loadEmulator();
+  })
+  .catch(() => {
+    window.EJS_biosUrl = "/bios/neogeo.zip";
+    loadEmulator();
+  });
 
-<script src="https://cdn.emulatorjs.org/stable/data/loader.js"></script>
+function loadEmulator() {
+  const script = document.createElement('script');
+  script.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
+  document.body.appendChild(script);
+}
+
+</script>
 
 </body>
 </html>

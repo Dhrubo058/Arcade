@@ -13,6 +13,31 @@ export default function ControllerPage() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [playerName, setPlayerName] = useState('');
   const [isJoined, setIsJoined] = useState(false);
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+
+  useEffect(() => {
+    const updateStatus = () => {
+      if (socket.connected) setSocketStatus('connected');
+      else if (socket.active) setSocketStatus('connecting');
+      else setSocketStatus('disconnected');
+    };
+
+    socket.on('connect', updateStatus);
+    socket.on('disconnect', updateStatus);
+    socket.on('connect_error', updateStatus);
+
+    if (!socket.connected) {
+      socket.connect();
+    } else {
+      updateStatus();
+    }
+
+    return () => {
+      socket.off('connect', updateStatus);
+      socket.off('disconnect', updateStatus);
+      socket.off('connect_error', updateStatus);
+    };
+  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -87,8 +112,13 @@ export default function ControllerPage() {
           {/* Top: Status */}
           <div className="p-6 flex items-center justify-between border-b border-zinc-900">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">Connected</span>
+              <div className={`w-2 h-2 rounded-full ${
+                socketStatus === 'connected' ? 'bg-emerald-500' : 
+                socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+              }`} />
+              <span className={`text-[10px] font-black uppercase tracking-widest ${
+                socketStatus === 'connected' ? 'text-emerald-500' : 'text-zinc-500'
+              }`}>{socketStatus}</span>
             </div>
             <span className="text-xs font-black italic uppercase tracking-tighter">{playerName}</span>
             <button onClick={() => window.location.reload()} className="text-zinc-500"><Power className="w-4 h-4" /></button>

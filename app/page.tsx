@@ -20,8 +20,27 @@ export default function Home() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [booting, setBooting] = useState(true);
+  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
   const router = useRouter();
   const carouselRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const updateStatus = () => {
+      if (socket.connected) setSocketStatus('connected');
+      else if (socket.active) setSocketStatus('connecting');
+      else setSocketStatus('disconnected');
+    };
+
+    socket.on('connect', updateStatus);
+    socket.on('disconnect', updateStatus);
+    socket.on('connect_error', updateStatus);
+
+    return () => {
+      socket.off('connect', updateStatus);
+      socket.off('disconnect', updateStatus);
+      socket.off('connect_error', updateStatus);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -76,10 +95,18 @@ export default function Home() {
   }, [selectedIndex]);
 
   const handleCreateRoom = () => {
-    socket.connect();
-    socket.emit('create-room', (roomId: string) => {
-      router.push(`/room/${roomId}`);
-    });
+    const createRoom = () => {
+      socket.emit('create-room', ({ roomId }: { roomId: string }) => {
+        router.push(`/room/${roomId}`);
+      });
+    };
+
+    if (!socket.connected) {
+      socket.connect();
+      socket.once('connect', createRoom);
+    } else {
+      createRoom();
+    }
   };
 
   if (booting) {
@@ -132,6 +159,15 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full">
+            <div className={`w-2 h-2 rounded-full ${
+              socketStatus === 'connected' ? 'bg-emerald-500' : 
+              socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+            }`} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+              {socketStatus}
+            </span>
+          </div>
           <button 
             onClick={() => router.push('/play?rom=' + selectedGame?.filename)}
             className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-full transition-all text-sm font-bold"

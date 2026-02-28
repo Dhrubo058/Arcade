@@ -20,7 +20,11 @@ app.prepare().then(() => {
     cors: {
       origin: "*",
       methods: ["GET", "POST"]
-    }
+    },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    connectTimeout: 45000,
+    allowEIO3: true
   });
 
   // Room state management
@@ -31,13 +35,14 @@ app.prepare().then(() => {
 
     socket.on('create-room', (callback) => {
       const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const initialPlayers = [{ id: socket.id, type: 'host', name: 'Player 1' }];
       rooms.set(roomId, {
         host: socket.id,
-        players: [{ id: socket.id, type: 'host', name: 'Player 1' }],
+        players: initialPlayers,
         game: null
       });
       socket.join(roomId);
-      callback(roomId);
+      callback({ roomId, players: initialPlayers });
     });
 
     socket.on('join-room', ({ roomId, name }, callback) => {
@@ -57,6 +62,15 @@ app.prepare().then(() => {
       }
     });
 
+    socket.on('get-room-info', (roomId, callback) => {
+      const room = rooms.get(roomId);
+      if (room) {
+        callback({ success: true, players: room.players, game: room.game });
+      } else {
+        callback({ success: false, message: 'Room not found' });
+      }
+    });
+
     socket.on('select-game', ({ roomId, game }) => {
       const room = rooms.get(roomId);
       if (room && room.host === socket.id) {
@@ -67,8 +81,8 @@ app.prepare().then(() => {
 
     socket.on('start-game', ({ roomId }) => {
       const room = rooms.get(roomId);
-      if (room && room.host === socket.id) {
-        io.to(roomId).emit('game-started');
+      if (room && room.host === socket.id && room.game) {
+        io.to(roomId).emit('game-started', room.game);
       }
     });
 
