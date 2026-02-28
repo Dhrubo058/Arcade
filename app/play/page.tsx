@@ -3,7 +3,6 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import EmulatorPlayer from '@/src/components/EmulatorPlayer';
-import Navbar from '@/src/components/Navbar';
 import { ChevronLeft, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import socket from '@/src/lib/socket';
@@ -144,17 +143,17 @@ function PlayContent() {
   return (
     <div className="h-screen flex flex-col bg-black overflow-hidden">
       <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-2 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-sm font-bold uppercase tracking-widest">
+        <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors text-[10px] md:text-sm font-bold uppercase tracking-widest">
           <ChevronLeft className="w-4 h-4" />
           Back
         </Link>
-        <div className="flex items-center gap-3">
-          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className="text-white font-black italic tracking-tighter text-sm uppercase">
+        <div className="flex items-center gap-2 md:gap-3">
+          <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-red-500 animate-pulse" />
+          <span className="text-white font-black italic tracking-tighter text-[10px] md:text-sm uppercase truncate max-w-[150px] md:max-w-none">
             Playing: {game.name}
           </span>
         </div>
-        <div className="w-20" /> {/* Spacer */}
+        <div className="w-12 md:w-20" /> {/* Spacer */}
       </div>
       
       <div className="flex-1 relative">

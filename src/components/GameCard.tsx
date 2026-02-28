@@ -53,16 +53,16 @@ export default function GameCard({ game, isFocused }: GameCardProps) {
       }`} />
 
       {/* Content */}
-      <div className="absolute inset-x-0 bottom-0 p-6">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="px-2 py-0.5 bg-emerald-500 text-black text-[10px] font-black rounded uppercase tracking-widest">
+      <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
+        <div className="flex items-center gap-2 mb-1 md:mb-2">
+          <span className="px-1.5 md:px-2 py-0.5 bg-emerald-500 text-black text-[8px] md:text-[10px] font-black rounded uppercase tracking-widest">
             MVS
           </span>
-          <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-tighter">
+          <span className="text-[8px] md:text-[10px] font-mono text-zinc-400 uppercase tracking-tighter">
             {romFilename}
           </span>
         </div>
-        <h3 className={`text-2xl font-black italic tracking-tighter uppercase transition-colors duration-300 ${
+        <h3 className={`text-xl md:text-2xl font-black italic tracking-tighter uppercase transition-colors duration-300 ${
           isFocused ? 'text-emerald-400' : 'text-white'
         }`}>
           {game.name}

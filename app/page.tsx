@@ -1,9 +1,6 @@
 "use client";
 
-import Navbar from '@/src/components/Navbar';
 import GameCard from '@/src/components/GameCard';
-import fs from 'fs';
-import path from 'path';
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, User, Gamepad2, Play, Info } from 'lucide-react';
@@ -85,11 +82,16 @@ export default function Home() {
     if (carouselRef.current) {
       const selectedCard = carouselRef.current.children[selectedIndex] as HTMLElement;
       if (selectedCard) {
-        selectedCard.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'center',
-        });
+        const container = carouselRef.current;
+        const targetScroll = selectedCard.offsetLeft - (container.offsetWidth / 2) + (selectedCard.offsetWidth / 2);
+        
+        // Only scroll if we are not already close to the target
+        if (Math.abs(container.scrollLeft - targetScroll) > 10) {
+          container.scrollTo({
+            left: targetScroll,
+            behavior: 'smooth'
+          });
+        }
       }
     }
   }, [selectedIndex]);
@@ -145,21 +147,32 @@ export default function Home() {
 
   if (loading) return null;
 
+  const handleScroll = () => {
+    if (carouselRef.current) {
+      const scrollLeft = carouselRef.current.scrollLeft;
+      const cardWidth = window.innerWidth < 768 ? 240 + 16 : 400 + 32; // width + gap
+      const index = Math.round(scrollLeft / cardWidth);
+      if (index !== selectedIndex && index >= 0 && index < games.length) {
+        setSelectedIndex(index);
+      }
+    }
+  };
+
   const selectedGame = games[selectedIndex];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white overflow-hidden flex flex-col">
       {/* Top Bar */}
-      <nav className="p-6 flex items-center justify-between z-50">
+      <nav className="p-4 md:p-6 flex flex-col sm:flex-row items-center justify-between gap-4 z-50">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
-            <Gamepad2 className="w-6 h-6 text-black" />
+          <div className="w-8 h-8 md:w-10 md:h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)]">
+            <Gamepad2 className="w-5 h-5 md:w-6 md:h-6 text-black" />
           </div>
-          <span className="text-2xl font-black tracking-tighter italic uppercase">Arcade<span className="text-emerald-500">OS</span></span>
+          <span className="text-xl md:text-2xl font-black tracking-tighter italic uppercase">Arcade<span className="text-emerald-500">OS</span></span>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full">
+        <div className="flex items-center gap-2 md:gap-4 scale-90 sm:scale-100">
+          <div className="hidden xs:flex items-center gap-2 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full">
             <div className={`w-2 h-2 rounded-full ${
               socketStatus === 'connected' ? 'bg-emerald-500' : 
               socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
@@ -170,17 +183,17 @@ export default function Home() {
           </div>
           <button 
             onClick={() => router.push('/play?rom=' + selectedGame?.filename)}
-            className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-full transition-all text-sm font-bold"
+            className="flex items-center gap-2 px-4 md:px-6 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-full transition-all text-xs md:text-sm font-bold"
           >
-            <User className="w-4 h-4 text-emerald-500" />
-            SOLO MODE
+            <User className="w-3 h-3 md:w-4 md:h-4 text-emerald-500" />
+            SOLO
           </button>
           <button 
             onClick={handleCreateRoom}
-            className="flex items-center gap-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full transition-all text-sm font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+            className="flex items-center gap-2 px-4 md:px-6 py-2 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full transition-all text-xs md:text-sm font-bold shadow-[0_0_20px_rgba(16,185,129,0.3)]"
           >
-            <Users className="w-4 h-4" />
-            MULTIPLAYER
+            <Users className="w-3 h-3 md:w-4 md:h-4" />
+            ROOM
           </button>
         </div>
       </nav>
@@ -193,7 +206,7 @@ export default function Home() {
         </div>
 
         {/* Game Info */}
-        <div className="px-12 mb-8 z-10">
+        <div className="px-6 md:px-12 mb-4 md:mb-8 z-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={selectedGame?.slug}
@@ -202,11 +215,11 @@ export default function Home() {
               exit={{ opacity: 0, x: 20 }}
               className="max-w-2xl"
             >
-              <h1 className="text-7xl font-black italic tracking-tighter mb-4 uppercase leading-none">
+              <h1 className="text-4xl md:text-7xl font-black italic tracking-tighter mb-2 md:mb-4 uppercase leading-none">
                 {selectedGame?.name}
               </h1>
-              <div className="flex items-center gap-4 text-zinc-500 font-bold text-sm uppercase tracking-widest">
-                <span className="px-2 py-0.5 border border-zinc-800 rounded">NEO GEO MVS</span>
+              <div className="flex items-center gap-3 md:gap-4 text-zinc-500 font-bold text-[10px] md:text-sm uppercase tracking-widest">
+                <span className="px-1.5 md:px-2 py-0.5 border border-zinc-800 rounded">NEO GEO MVS</span>
                 <span>•</span>
                 <span>1990-2004 SNK CORP.</span>
               </div>
@@ -215,10 +228,11 @@ export default function Home() {
         </div>
 
         {/* Carousel */}
-        <div className="relative w-full overflow-hidden py-12">
+        <div className="relative w-full py-8 md:py-12">
           <div 
             ref={carouselRef}
-            className="flex gap-8 px-[10%] transition-transform duration-500 ease-out"
+            onScroll={handleScroll}
+            className="flex gap-4 md:gap-8 px-[calc(50%-120px)] md:px-[10%] overflow-x-auto no-scrollbar snap-x snap-center scroll-smooth pb-8"
           >
             {games.map((game, index) => (
               <motion.div
@@ -229,8 +243,8 @@ export default function Home() {
                   opacity: index === selectedIndex ? 1 : 0.4,
                   zIndex: index === selectedIndex ? 20 : 10,
                 }}
-                className={`flex-shrink-0 w-[400px] cursor-pointer transition-all duration-300 ${
-                  index === selectedIndex ? 'ring-4 ring-emerald-500 ring-offset-8 ring-offset-zinc-950 rounded-2xl' : ''
+                className={`flex-shrink-0 w-[240px] md:w-[400px] cursor-pointer transition-all duration-300 snap-center ${
+                  index === selectedIndex ? 'ring-2 md:ring-4 ring-emerald-500 ring-offset-4 md:ring-offset-8 ring-offset-zinc-950 rounded-2xl' : ''
                 }`}
               >
                 <GameCard game={game} isFocused={index === selectedIndex} />
@@ -240,7 +254,7 @@ export default function Home() {
         </div>
 
         {/* Controls Hint */}
-        <div className="absolute bottom-12 left-12 flex items-center gap-8 text-zinc-500 text-xs font-bold uppercase tracking-widest">
+        <div className="hidden md:flex absolute bottom-12 left-12 items-center gap-8 text-zinc-500 text-xs font-bold uppercase tracking-widest">
           <div className="flex items-center gap-2">
             <span className="w-8 h-8 flex items-center justify-center bg-zinc-900 border border-zinc-800 rounded">←</span>
             <span className="w-8 h-8 flex items-center justify-center bg-zinc-900 border border-zinc-800 rounded">→</span>

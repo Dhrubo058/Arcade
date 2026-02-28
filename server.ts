@@ -10,17 +10,19 @@ const dev = process.env.NODE_ENV !== 'production';
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
-const port = 3000;
+const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 app.prepare().then(() => {
-  console.log('Next.js app prepared');
+  console.log(`Next.js app prepared. Environment: ${process.env.NODE_ENV || 'development'}`);
   const server = express();
   const httpServer = createServer(server);
   const io = new Server(httpServer, {
     cors: {
       origin: "*",
-      methods: ["GET", "POST"]
+      methods: ["GET", "POST"],
+      credentials: true
     },
+    transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000,
     connectTimeout: 45000,
@@ -31,7 +33,12 @@ app.prepare().then(() => {
   const rooms = new Map();
 
   io.on('connection', (socket) => {
-    console.log('User connected:', socket.id);
+    console.log(`[SERVER] New connection: ${socket.id} from ${socket.handshake.address}`);
+    console.log(`[SERVER] Transport: ${socket.conn.transport.name}`);
+
+    socket.conn.on('upgrade', (transport) => {
+      console.log(`[SERVER] Transport upgraded to: ${transport.name} for ${socket.id}`);
+    });
 
     socket.on('create-room', (callback) => {
       const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
