@@ -58,6 +58,7 @@ export default function ControllerPage() {
 
     socket.on('kicked', () => {
       alert('You have been kicked from the room');
+      localStorage.removeItem(`arcade_joined_${roomId}`);
       window.location.href = '/';
     });
 
@@ -75,7 +76,7 @@ export default function ControllerPage() {
       socket.off('player-left');
       socket.off('kicked');
     };
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -86,18 +87,33 @@ export default function ControllerPage() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const handleJoin = () => {
+  // Load state from localStorage
+  useEffect(() => {
+    const savedName = localStorage.getItem(`arcade_name_${roomId}`);
+    if (savedName) setPlayerName(savedName);
+    
+    const savedJoined = localStorage.getItem(`arcade_joined_${roomId}`);
+    if (savedJoined === 'true' && socket.connected) {
+      handleJoin(savedName || '');
+    }
+  }, [roomId, socketStatus]);
+
+  const handleJoin = (nameToUse?: string) => {
+    const finalName = nameToUse !== undefined ? nameToUse : playerName;
     if (!socket.connected) {
       socket.connect();
     }
-    socket.emit('join-room', { roomId, name: playerName }, (response: any) => {
+    socket.emit('join-room', { roomId, name: finalName }, (response: any) => {
       if (response.success) {
         setIsJoined(true);
         setConnected(true);
         setIsOp(response.isOp);
         setPlayers(response.players);
+        localStorage.setItem(`arcade_name_${roomId}`, finalName);
+        localStorage.setItem(`arcade_joined_${roomId}`, 'true');
       } else {
         alert(response.message);
+        localStorage.removeItem(`arcade_joined_${roomId}`);
       }
     });
   };
@@ -141,7 +157,7 @@ export default function ControllerPage() {
         />
         
         <button 
-          onClick={handleJoin}
+          onClick={() => handleJoin()}
           className="w-full max-w-xs bg-emerald-500 hover:bg-emerald-400 text-black font-black italic uppercase tracking-tighter p-4 rounded-2xl transition-all shadow-[0_0_30px_rgba(16,185,129,0.2)]"
         >
           CONNECT CONTROLLER

@@ -35,27 +35,41 @@ server.get('/health', (req, res) => {
 
 // Room state management
 const rooms = new Map();
+const hostDisconnectTimeouts = new Map();
 
 // Periodic cleanup to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
   for (const [roomId, room] of rooms.entries()) {
-    // Remove rooms with no players
-    if (!room.players || room.players.length === 0) {
-      console.log(`[CLEANUP] Removing empty room: ${roomId}`);
+    // Remove rooms with no players AND no host for a while
+    if ((!room.players || room.players.length === 0) && !io.sockets.sockets.get(room.host)) {
+      console.log(`[CLEANUP] Removing empty/abandoned room: ${roomId}`);
       rooms.delete(roomId);
+      hostDisconnectTimeouts.delete(roomId);
       continue;
     }
 
-    // Verify host is still connected
+    // Verify host is still connected (with grace period)
     const hostSocket = io.sockets.sockets.get(room.host);
-    if (!hostSocket) {
-      console.log(`[CLEANUP] Host disconnected for room ${roomId}, closing...`);
-      io.to(roomId).emit('room-closed');
-      rooms.delete(roomId);
+    if (!hostSocket && !hostDisconnectTimeouts.has(roomId)) {
+      console.log(`[CLEANUP] Host disconnected for room ${roomId}, starting grace period...`);
+      // Give host 10 seconds to reconnect before closing room
+      const timeout = setTimeout(() => {
+        if (!io.sockets.sockets.get(room.host)) {
+          console.log(`[CLEANUP] Grace period expired for room ${roomId}, closing...`);
+          io.to(roomId).emit('room-closed');
+          rooms.delete(roomId);
+          hostDisconnectTimeouts.delete(roomId);
+        }
+      }, 10000);
+      hostDisconnectTimeouts.set(roomId, timeout);
+    } else if (hostSocket && hostDisconnectTimeouts.has(roomId)) {
+      console.log(`[CLEANUP] Host reconnected for room ${roomId}, clearing grace period.`);
+      clearTimeout(hostDisconnectTimeouts.get(roomId));
+      hostDisconnectTimeouts.delete(roomId);
     }
   }
-}, 60000);
+}, 30000);
 
 io.on('connection', (socket) => {
   console.log(`[SERVER] New connection: ${socket.id} from ${socket.handshake.address}`);

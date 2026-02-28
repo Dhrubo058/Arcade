@@ -46,24 +46,125 @@ function PlayContent() {
     if (roomId) {
       if (!socket.connected) socket.connect();
 
+      // Inject virtual gamepad script into the iframe
+      const injectVirtualGamepad = () => {
+        const iframe = document.getElementById('emulator-frame') as HTMLIFrameElement;
+        if (iframe && iframe.contentWindow) {
+          try {
+            // We use a script tag to inject into the iframe's context
+            const script = iframe.contentWindow.document.createElement('script');
+            script.textContent = `
+              (function() {
+                const virtualGamepads = [null, null, null, null];
+                
+                function createGamepad(index) {
+                  return {
+                    id: 'Virtual Gamepad ' + (index + 1),
+                    index: index,
+                    connected: true,
+                    timestamp: performance.now(),
+                    mapping: 'standard',
+                    axes: [0, 0, 0, 0],
+                    buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+                  };
+                }
+
+                // Override getGamepads
+                const originalGetGamepads = navigator.getGamepads.bind(navigator);
+                navigator.getGamepads = function() {
+                  const realGamepads = originalGetGamepads();
+                  const result = Array.from(realGamepads || [null, null, null, null]);
+                  for (let i = 0; i < 4; i++) {
+                    if (virtualGamepads[i]) {
+                      result[i] = virtualGamepads[i];
+                    }
+                  }
+                  return result;
+                };
+
+                // Listen for updates from parent
+                window.addEventListener('message', (event) => {
+                  if (event.data.type === 'VIRTUAL_GAMEPAD_UPDATE') {
+                    const { playerIndex, buttonIndex, state } = event.data;
+                    if (!virtualGamepads[playerIndex]) {
+                      virtualGamepads[playerIndex] = createGamepad(playerIndex);
+                      
+                      // Dispatch connected event
+                      const connectEvent = new Event('gamepadconnected');
+                      Object.defineProperty(connectEvent, 'gamepad', { value: virtualGamepads[playerIndex] });
+                      window.dispatchEvent(connectEvent);
+                    }
+                    
+                    const gamepad = virtualGamepads[playerIndex];
+                    gamepad.timestamp = performance.now();
+                    gamepad.buttons[buttonIndex].pressed = (state === 'down');
+                    gamepad.buttons[buttonIndex].value = (state === 'down' ? 1 : 0);
+                  }
+                });
+
+                console.log('Virtual Gamepad System Initialized');
+              })();
+            `;
+            iframe.contentWindow.document.head.appendChild(script);
+          } catch (e) {
+            console.error('Failed to inject virtual gamepad script:', e);
+          }
+        }
+      };
+
+      // Map controller input to gamepad button index
+      const inputToButtonIndex: Record<string, number> = {
+        'ArrowUp': 12,
+        'ArrowDown': 13,
+        'ArrowLeft': 14,
+        'ArrowRight': 15,
+        'KeyZ': 0, // A
+        'KeyX': 1, // B
+        'KeyC': 2, // C
+        'KeyV': 3, // D
+        'Enter': 9, // Start
+        'Shift': 8, // Select/Coin
+      };
+
       socket.on('player-input', ({ playerIndex, input, state }) => {
         console.log(`Player ${playerIndex} input: ${input} ${state}`);
         
-        // Dispatch keyboard event to the emulator
-        const eventType = state === 'down' ? 'keydown' : 'keyup';
-        const event = new KeyboardEvent(eventType, {
-          key: input,
-          code: input,
-          bubbles: true,
-        });
-        
-        // Try to dispatch to both window and emulator frame
-        window.dispatchEvent(event);
-        const iframe = document.getElementById('emulator-frame') as HTMLIFrameElement;
-        if (iframe && iframe.contentWindow) {
-          iframe.contentWindow.dispatchEvent(event);
+        const buttonIndex = inputToButtonIndex[input];
+        if (buttonIndex !== undefined) {
+          const iframe = document.getElementById('emulator-frame') as HTMLIFrameElement;
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              type: 'VIRTUAL_GAMEPAD_UPDATE',
+              playerIndex,
+              buttonIndex,
+              state
+            }, '*');
+          }
+        }
+
+        // Fallback: Also dispatch keyboard event for Player 1
+        if (playerIndex === 0) {
+          const eventType = state === 'down' ? 'keydown' : 'keyup';
+          const event = new KeyboardEvent(eventType, {
+            key: input,
+            code: input,
+            bubbles: true,
+          });
+          window.dispatchEvent(event);
+          const iframe = document.getElementById('emulator-frame') as HTMLIFrameElement;
+          if (iframe && iframe.contentWindow) {
+            iframe.contentWindow.dispatchEvent(event);
+          }
         }
       });
+
+      // Try to inject script when iframe loads
+      const iframe = document.getElementById('emulator-frame');
+      if (iframe) {
+        iframe.addEventListener('load', injectVirtualGamepad);
+        // Also try immediately in case it's already loaded
+        injectVirtualGamepad();
+      }
 
       socket.on('room-closed', () => {
         router.push('/');
@@ -72,6 +173,9 @@ function PlayContent() {
       return () => {
         socket.off('player-input');
         socket.off('room-closed');
+        if (iframe) {
+          iframe.removeEventListener('load', injectVirtualGamepad);
+        }
       };
     }
   }, [rom, roomId, router]);
