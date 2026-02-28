@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "next build",
-    "start": "tsx server.ts",
+    "build": "next build && tsc --project tsconfig.server.json",
+    "start": "node server.js",
     "lint": "next lint"
   },
   "dependencies": {
