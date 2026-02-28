@@ -11,6 +11,7 @@ interface GameCardProps {
     name: string;
     filename: string;
     slug: string;
+    image?: string | null;
   };
   isFocused?: boolean;
 }
@@ -19,7 +20,7 @@ export default function GameCard({ game, isFocused }: GameCardProps) {
   const [imageError, setImageError] = useState(false);
   
   const romFilename = game.filename.split('/').pop()?.replace('.zip', '') || game.slug;
-  const imagePath = `/images/games/${romFilename}.png`;
+  const imagePath = game.image || `/image/${romFilename}.png`;
 
   return (
     <div className={`relative aspect-[3/4] rounded-2xl overflow-hidden transition-all duration-300 ${

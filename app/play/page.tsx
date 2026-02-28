@@ -15,6 +15,7 @@ function PlayContent() {
   const router = useRouter();
   
   const [romExists, setRomExists] = useState<boolean | null>(null);
+  const [biosExists, setBiosExists] = useState<boolean | null>(null);
   
   const game = rom ? {
     name: rom.split('/').pop()?.replace('.zip', '').split(/[-_]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || 'Unknown Game',
@@ -28,6 +29,11 @@ function PlayContent() {
       fetch(romPath, { method: 'HEAD' })
         .then(res => setRomExists(res.ok))
         .catch(() => setRomExists(false));
+
+      // Check for BIOS as well
+      fetch('/roms/neogeo.zip', { method: 'HEAD' })
+        .then(res => setBiosExists(res.ok))
+        .catch(() => setBiosExists(false));
     }
 
     if (roomId) {
@@ -100,7 +106,26 @@ function PlayContent() {
     );
   }
 
-  if (romExists === null) {
+  if (romExists === true && biosExists === false) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="w-20 h-20 text-yellow-500 mb-6" />
+        <h1 className="text-4xl font-black text-white mb-4 italic tracking-tighter uppercase">BIOS MISSING</h1>
+        <p className="text-zinc-400 mb-8 max-w-md">
+          The Neo Geo BIOS file <span className="text-white font-bold">neogeo.zip</span> is missing from the server. 
+          Please ensure <code className="bg-zinc-900 px-2 py-1 rounded text-emerald-400">/public/roms/neogeo.zip</code> exists.
+        </p>
+        <Link 
+          href="/"
+          className="bg-emerald-500 hover:bg-emerald-400 text-black font-black px-8 py-4 rounded-2xl transition-all"
+        >
+          RETURN TO ARCADE
+        </Link>
+      </div>
+    );
+  }
+
+  if (romExists === null || biosExists === null) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-white font-black italic">
         VERIFYING MISSION DATA...

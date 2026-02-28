@@ -2,8 +2,86 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+const ROM_MAPPING: Record<string, string> = {
+  'mslug': 'Metal Slug',
+  'mslug2': 'Metal Slug 2',
+  'mslug3': 'Metal Slug 3',
+  'mslug4': 'Metal Slug 4',
+  'mslug5': 'Metal Slug 5',
+  'mslugx': 'Metal Slug X',
+  'kof94': "The King of Fighters '94",
+  'kof95': "The King of Fighters '95",
+  'kof96': "The King of Fighters '96",
+  'kof97': "The King of Fighters '97",
+  'kof98': "The King of Fighters '98",
+  'kof99': "The King of Fighters '99",
+  'kof2000': 'The King of Fighters 2000',
+  'kof2001': 'The King of Fighters 2001',
+  'kof2002': 'The King of Fighters 2002',
+  'kof2003': 'The King of Fighters 2003',
+  'samsho': 'Samurai Shodown',
+  'samsho2': 'Samurai Shodown II',
+  'samsho3': 'Samurai Shodown III',
+  'samsho4': 'Samurai Shodown IV',
+  'samsho5': 'Samurai Shodown V',
+  'fatfury1': 'Fatal Fury',
+  'fatfury2': 'Fatal Fury 2',
+  'fatfury3': 'Fatal Fury 3',
+  'rbff1': 'Real Bout Fatal Fury',
+  'rbffspec': 'Real Bout Fatal Fury Special',
+  'rbff2': 'Real Bout Fatal Fury 2',
+  'garou': 'Garou: Mark of the Wolves',
+  'lastblad': 'The Last Blade',
+  'lastbld2': 'The Last Blade 2',
+  'neobombe': 'Neo Bomberman',
+  'maglord': 'Magician Lord',
+  'viewpoin': 'Viewpoint',
+  'pulstar': 'Pulstar',
+  'blazstar': 'Blazing Star',
+  'shocktro': 'Shock Troopers',
+  'shocktr2': 'Shock Troopers: 2nd Squad',
+  'wjammers': 'Windjammers',
+  'turfmast': 'Neo Turf Masters',
+  'stakwin': 'Stakes Winner',
+  'stakwin2': 'Stakes Winner 2',
+  'puzzledp': 'Puzzle Bobble',
+  'puzzled2': 'Puzzle Bobble 2',
+  'magdrop2': 'Magical Drop II',
+  'magdrop3': 'Magical Drop III',
+  'aof': 'Art of Fighting',
+  'aof2': 'Art of Fighting 2',
+  'aof3': 'Art of Fighting 3',
+  'sengoku': 'Sengoku',
+  'sengoku2': 'Sengoku 2',
+  'sengoku3': 'Sengoku 3',
+  'wh1': 'World Heroes',
+  'wh2': 'World Heroes 2',
+  'wh2jet': 'World Heroes 2 Jet',
+  'whp': 'World Heroes Perfect',
+  'kabukikl': 'Far East of Eden: Kabuki Klash',
+  'wakuwak7': 'Waku Waku 7',
+  'gowcaizr': 'Voltage Fighter: Gowcaizer',
+  'doubledr': 'Double Dragon',
+  'matrim': 'Matrimelee',
+  'svc': 'SVC Chaos: SNK vs. Capcom',
+  'snkvscap': 'SNK vs. Capcom: SVC Chaos',
+  'rotd': 'Rage of the Dragons',
+  'breakers': 'Breakers',
+  'breakrev': 'Breakers Revenge',
+  'karnovr': "Karnov's Revenge",
+  'fightfev': 'Fight Fever',
+  'galaxyfg': 'Galaxy Fight',
+  'lasthope': 'Last Hope',
+  'faststri': 'Fast Striker',
+  'gunlord': 'Gunlord',
+  'razion': 'Razion',
+  'xyx': 'XYX',
+  'neoxyx': 'Neo XYX'
+};
+
 export async function GET() {
   const romsDir = path.join(process.cwd(), 'public', 'roms');
+  const imagesDir = path.join(process.cwd(), 'public', 'image');
   let detectedGames: any[] = [];
 
   const scanRoms = (dir: string) => {
@@ -19,15 +97,28 @@ export async function GET() {
         const relativePath = path.relative(path.join(process.cwd(), 'public', 'roms'), fullPath);
         const filename = file.replace('.zip', '');
         
-        const name = filename
+        let name = ROM_MAPPING[filename] || filename
           .split(/[-_]/)
           .map(word => word.charAt(0).toUpperCase() + word.slice(1))
           .join(' ');
 
+        // Check for custom image
+        const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+        let imageUrl = null;
+        
+        for (const ext of imageExtensions) {
+          const imagePath = path.join(imagesDir, `${filename}${ext}`);
+          if (fs.existsSync(imagePath)) {
+            imageUrl = `/image/${filename}${ext}`;
+            break;
+          }
+        }
+
         detectedGames.push({
           name: name,
           filename: relativePath,
-          slug: filename
+          slug: filename,
+          image: imageUrl
         });
       }
     }
