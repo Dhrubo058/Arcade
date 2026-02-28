@@ -67,25 +67,30 @@ io.on('connection', (socket) => {
 
   socket.on('create-room', (callback) => {
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const initialPlayers = [{ id: socket.id, type: 'host', name: 'Player 1' }];
     rooms.set(roomId, {
       host: socket.id,
-      players: initialPlayers,
+      players: [], // Host is not a player
       game: null
     });
     socket.join(roomId);
-    callback({ roomId, players: initialPlayers });
+    callback({ roomId, players: [] });
   });
 
   socket.on('join-room', ({ roomId, name }, callback) => {
     const room = rooms.get(roomId);
     if (room) {
       if (room.players.length < 4) {
-        const player = { id: socket.id, type: 'controller', name: name || `Player ${room.players.length + 1}` };
+        const isOp = room.players.length === 0; // First player is OP
+        const player = { 
+          id: socket.id, 
+          type: 'controller', 
+          name: name || `Player ${room.players.length + 1}`,
+          isOp: isOp
+        };
         room.players.push(player);
         socket.join(roomId);
         io.to(roomId).emit('player-joined', room.players);
-        callback({ success: true, players: room.players });
+        callback({ success: true, players: room.players, isOp });
       } else {
         callback({ success: false, message: 'Room full' });
       }
@@ -105,16 +110,61 @@ io.on('connection', (socket) => {
 
   socket.on('select-game', ({ roomId, game }) => {
     const room = rooms.get(roomId);
-    if (room && room.host === socket.id) {
-      room.game = game;
-      io.to(roomId).emit('game-selected', game);
+    if (room) {
+      const player = room.players.find(p => p.id === socket.id);
+      const isOp = player?.isOp;
+      const isHost = room.host === socket.id;
+
+      if (isHost || isOp) {
+        room.game = game;
+        io.to(roomId).emit('game-selected', game);
+      }
     }
   });
 
   socket.on('start-game', ({ roomId }) => {
     const room = rooms.get(roomId);
-    if (room && room.host === socket.id && room.game) {
-      io.to(roomId).emit('game-started', room.game);
+    if (room) {
+      const player = room.players.find(p => p.id === socket.id);
+      const isOp = player?.isOp;
+      const isHost = room.host === socket.id;
+
+      if ((isHost || isOp) && room.game) {
+        io.to(roomId).emit('game-started', room.game);
+      }
+    }
+  });
+
+  socket.on('kick-player', ({ roomId, playerId }) => {
+    const room = rooms.get(roomId);
+    if (room) {
+      const opPlayer = room.players.find(p => p.id === socket.id);
+      if (opPlayer?.isOp || room.host === socket.id) {
+        const playerIndex = room.players.findIndex(p => p.id === playerId);
+        if (playerIndex !== -1) {
+          const kickedPlayer = room.players[playerIndex];
+          room.players.splice(playerIndex, 1);
+          
+          // If kicked player was OP, assign to someone else
+          if (kickedPlayer.isOp && room.players.length > 0) {
+            room.players[0].isOp = true;
+          }
+
+          io.to(playerId).emit('kicked');
+          io.to(roomId).emit('player-left', room.players);
+        }
+      }
+    }
+  });
+
+  socket.on('transfer-op', ({ roomId, playerId }) => {
+    const room = rooms.get(roomId);
+    if (room) {
+      const opPlayer = room.players.find(p => p.id === socket.id);
+      if (opPlayer?.isOp || room.host === socket.id) {
+        room.players.forEach(p => p.isOp = (p.id === playerId));
+        io.to(roomId).emit('player-joined', room.players); // Refresh list
+      }
     }
   });
 
@@ -144,14 +194,24 @@ io.on('connection', (socket) => {
     for (const [roomId, room] of rooms.entries()) {
       const playerIndex = room.players.findIndex(p => p.id === socket.id);
       if (playerIndex !== -1) {
+        const removedPlayer = room.players[playerIndex];
         room.players.splice(playerIndex, 1);
+        
         if (room.host === socket.id) {
           // Host disconnected, close room
           io.to(roomId).emit('room-closed');
           rooms.delete(roomId);
         } else {
+          // If the disconnected player was OP, assign to someone else
+          if (removedPlayer.isOp && room.players.length > 0) {
+            room.players[0].isOp = true;
+          }
           io.to(roomId).emit('player-left', room.players);
         }
+      } else if (room.host === socket.id) {
+        // Host disconnected even if not in players array
+        io.to(roomId).emit('room-closed');
+        rooms.delete(roomId);
       }
     }
   });

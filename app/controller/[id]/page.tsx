@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import socket from '@/src/lib/socket';
-import { motion, useAnimation } from 'motion/react';
+import { motion, useAnimation, AnimatePresence } from 'motion/react';
 import { Gamepad2, Maximize2, RotateCcw, Power } from 'lucide-react';
 
 export default function ControllerPage() {
@@ -13,7 +13,25 @@ export default function ControllerPage() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [playerName, setPlayerName] = useState('');
   const [isJoined, setIsJoined] = useState(false);
+  const [isOp, setIsOp] = useState(false);
+  const [players, setPlayers] = useState<any[]>([]);
+  const [games, setGames] = useState<any[]>([]);
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const [adminTab, setAdminTab] = useState<'games' | 'players'>('games');
   const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+
+  useEffect(() => {
+    const fetchGames = async () => {
+      try {
+        const res = await fetch('/api/games');
+        const data = await res.json();
+        setGames(data);
+      } catch (err) {
+        console.error('Failed to fetch games:', err);
+      }
+    };
+    fetchGames();
+  }, []);
 
   useEffect(() => {
     const updateStatus = () => {
@@ -26,6 +44,23 @@ export default function ControllerPage() {
     socket.on('disconnect', updateStatus);
     socket.on('connect_error', updateStatus);
 
+    socket.on('player-joined', (updatedPlayers) => {
+      setPlayers(updatedPlayers);
+      const me = updatedPlayers.find((p: any) => p.id === socket.id);
+      if (me) setIsOp(me.isOp);
+    });
+
+    socket.on('player-left', (updatedPlayers) => {
+      setPlayers(updatedPlayers);
+      const me = updatedPlayers.find((p: any) => p.id === socket.id);
+      if (me) setIsOp(me.isOp);
+    });
+
+    socket.on('kicked', () => {
+      alert('You have been kicked from the room');
+      window.location.href = '/';
+    });
+
     if (!socket.connected) {
       socket.connect();
     } else {
@@ -36,6 +71,9 @@ export default function ControllerPage() {
       socket.off('connect', updateStatus);
       socket.off('disconnect', updateStatus);
       socket.off('connect_error', updateStatus);
+      socket.off('player-joined');
+      socket.off('player-left');
+      socket.off('kicked');
     };
   }, []);
 
@@ -56,10 +94,29 @@ export default function ControllerPage() {
       if (response.success) {
         setIsJoined(true);
         setConnected(true);
+        setIsOp(response.isOp);
+        setPlayers(response.players);
       } else {
         alert(response.message);
       }
     });
+  };
+
+  const handleSelectGame = (game: any) => {
+    socket.emit('select-game', { roomId, game });
+    setShowAdminMenu(false);
+  };
+
+  const handleKick = (playerId: string) => {
+    socket.emit('kick-player', { roomId, playerId });
+  };
+
+  const handleTransferOp = (playerId: string) => {
+    socket.emit('transfer-op', { roomId, playerId });
+  };
+
+  const handleStartGame = () => {
+    socket.emit('start-game', { roomId });
   };
 
   const sendInput = useCallback((input: string, state: 'down' | 'up') => {
@@ -107,6 +164,107 @@ export default function ControllerPage() {
 
   return (
     <div className="fixed inset-0 bg-zinc-950 text-white select-none touch-none overflow-hidden">
+      {/* Admin Menu Overlay */}
+      <AnimatePresence>
+        {showAdminMenu && (
+          <motion.div 
+            initial={{ opacity: 0, y: '100%' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: '100%' }}
+            className="fixed inset-0 z-50 bg-zinc-950 flex flex-col p-6"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-black italic uppercase tracking-tighter">Admin Panel</h2>
+              <button 
+                onClick={() => setShowAdminMenu(false)}
+                className="w-10 h-10 bg-zinc-900 rounded-full flex items-center justify-center font-black"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex gap-2 mb-6">
+              <button 
+                onClick={() => setAdminTab('games')}
+                className={`flex-1 py-3 rounded-xl font-black italic uppercase tracking-tighter text-sm ${adminTab === 'games' ? 'bg-emerald-500 text-black' : 'bg-zinc-900 text-zinc-500'}`}
+              >
+                Games
+              </button>
+              <button 
+                onClick={() => setAdminTab('players')}
+                className={`flex-1 py-3 rounded-xl font-black italic uppercase tracking-tighter text-sm ${adminTab === 'players' ? 'bg-emerald-500 text-black' : 'bg-zinc-900 text-zinc-500'}`}
+              >
+                Players
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {adminTab === 'games' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {games.map((game) => (
+                    <button
+                      key={game.slug}
+                      onClick={() => handleSelectGame(game)}
+                      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-left"
+                    >
+                      <div className="aspect-video bg-black rounded-lg mb-2 overflow-hidden relative">
+                        {game.image ? (
+                          <img src={game.image} alt={game.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-700 font-black uppercase tracking-widest">No Cover</div>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-black italic uppercase tracking-tighter truncate">{game.name}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {players.map((p) => (
+                    <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${p.isOp ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {p.name.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="font-black italic uppercase tracking-tighter text-sm">{p.name} {p.id === socket.id && '(You)'}</p>
+                          <p className="text-[8px] font-bold uppercase tracking-widest text-zinc-500">{p.isOp ? 'Operator' : 'Player'}</p>
+                        </div>
+                      </div>
+                      {p.id !== socket.id && (
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleTransferOp(p.id)}
+                            className="bg-zinc-800 text-[8px] font-black uppercase tracking-widest px-3 py-2 rounded-lg"
+                          >
+                            Make OP
+                          </button>
+                          <button 
+                            onClick={() => handleKick(p.id)}
+                            className="bg-red-500/20 text-red-500 text-[8px] font-black uppercase tracking-widest px-3 py-2 rounded-lg"
+                          >
+                            Kick
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {adminTab === 'games' && (
+              <button 
+                onClick={handleStartGame}
+                className="mt-6 w-full bg-emerald-500 text-black font-black italic uppercase tracking-tighter p-4 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.2)]"
+              >
+                START MISSION
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {orientation === 'portrait' ? (
         <div className="h-full flex flex-col">
           {/* Top: Status */}
@@ -120,8 +278,18 @@ export default function ControllerPage() {
                 socketStatus === 'connected' ? 'text-emerald-500' : 'text-zinc-500'
               }`}>{socketStatus}</span>
             </div>
-            <span className="text-xs font-black italic uppercase tracking-tighter">{playerName}</span>
-            <button onClick={() => window.location.reload()} className="text-zinc-500"><Power className="w-4 h-4" /></button>
+            <div className="flex items-center gap-4">
+              {isOp && (
+                <button 
+                  onClick={() => setShowAdminMenu(true)}
+                  className="bg-emerald-500 text-black text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full animate-pulse"
+                >
+                  Admin
+                </button>
+              )}
+              <span className="text-xs font-black italic uppercase tracking-tighter">{playerName}</span>
+              <button onClick={() => window.location.reload()} className="text-zinc-500"><Power className="w-4 h-4" /></button>
+            </div>
           </div>
 
           {/* Middle: D-Pad */}
