@@ -137,6 +137,9 @@ export default function ControllerPage() {
 
   const sendInput = useCallback((input: string, state: 'down' | 'up') => {
     if (connected) {
+      if (state === 'down' && window.navigator.vibrate) {
+        window.navigator.vibrate(10);
+      }
       socket.emit('controller-input', { roomId, input, state });
     }
   }, [connected, roomId]);
@@ -308,71 +311,87 @@ export default function ControllerPage() {
             </div>
           </div>
 
-          {/* Middle: D-Pad */}
-          <div className="flex-1 flex items-center justify-center p-12">
-            <div className="relative w-48 h-48">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2">
-                <Button label="↑" input="ArrowUp" />
-              </div>
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
-                <Button label="↓" input="ArrowDown" />
-              </div>
-              <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                <Button label="←" input="ArrowLeft" />
-              </div>
-              <div className="absolute right-0 top-1/2 -translate-y-1/2">
-                <Button label="→" input="ArrowRight" />
-              </div>
-              <div className="absolute inset-0 m-auto w-16 h-16 bg-zinc-900 rounded-2xl border border-zinc-800 flex items-center justify-center">
-                <Gamepad2 className="w-6 h-6 text-zinc-700" />
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom: Action Buttons */}
-          <div className="p-12 pb-24 grid grid-cols-2 gap-8">
-            <div className="grid grid-cols-2 gap-4">
-              <Button label="A" input="KeyZ" color="bg-emerald-600" />
-              <Button label="B" input="KeyX" color="bg-emerald-600" />
-              <Button label="C" input="KeyC" color="bg-emerald-600" />
-              <Button label="D" input="KeyV" color="bg-emerald-600" />
-            </div>
-            <div className="flex flex-col justify-end gap-4">
-              <Button label="START" input="Enter" size="w-full h-16" />
-              <Button label="COIN" input="Shift" size="w-full h-12" color="bg-zinc-900" />
-            </div>
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+            <RotateCcw className="w-12 h-12 text-emerald-500 mb-4 animate-spin-slow" />
+            <h2 className="text-xl font-black italic uppercase tracking-tighter mb-2">Rotate your phone</h2>
+            <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Landscape mode is required for the best handheld experience</p>
           </div>
         </div>
       ) : (
-        <div className="h-full flex items-center justify-between p-12">
-          {/* Left: D-Pad */}
-          <div className="relative w-48 h-48">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2">
-              <Button label="↑" input="ArrowUp" />
-            </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
-              <Button label="↓" input="ArrowDown" />
-            </div>
-            <div className="absolute left-0 top-1/2 -translate-y-1/2">
-              <Button label="←" input="ArrowLeft" />
-            </div>
-            <div className="absolute right-0 top-1/2 -translate-y-1/2">
-              <Button label="→" input="ArrowRight" />
+        <div className="h-full flex items-center justify-between px-12 py-6 relative">
+          {/* Left Side: D-Pad */}
+          <div className="relative w-48 h-48 flex items-center justify-center">
+            <div className="absolute inset-0 bg-zinc-900/50 rounded-full border border-zinc-800/50" />
+            <div className="relative z-10 grid grid-cols-3 grid-rows-3 gap-1">
+              <div />
+              <Button label="↑" input="ArrowUp" size="w-14 h-14" />
+              <div />
+              <Button label="←" input="ArrowLeft" size="w-14 h-14" />
+              <div className="w-14 h-14 bg-zinc-900 rounded-lg flex items-center justify-center">
+                <div className="w-4 h-4 bg-zinc-800 rounded-full shadow-inner" />
+              </div>
+              <Button label="→" input="ArrowRight" size="w-14 h-14" />
+              <div />
+              <Button label="↓" input="ArrowDown" size="w-14 h-14" />
+              <div />
             </div>
           </div>
 
-          {/* Center: System Buttons */}
-          <div className="flex flex-col gap-4">
-            <Button label="START" input="Enter" size="w-32 h-12" />
-            <Button label="COIN" input="Shift" size="w-32 h-12" color="bg-zinc-900" />
+          {/* Center: System Buttons & Info */}
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center">
+              <div className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-1">NeoGeo Arcade</div>
+              <div className="h-1 w-12 bg-emerald-500 rounded-full mb-4" />
+              
+              <div className="flex gap-4">
+                <div className="flex flex-col items-center gap-1">
+                  <Button label="SEL" input="Shift" size="w-14 h-8" color="bg-zinc-900" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-600">Select</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <Button label="START" input="Enter" size="w-14 h-8" color="bg-zinc-900" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-zinc-600">Start</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {isOp && (
+                <button 
+                  onClick={() => setShowAdminMenu(true)}
+                  className="bg-emerald-500 text-black text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full"
+                >
+                  Admin
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 bg-black/40 px-3 py-1 rounded-full border border-zinc-800">
+                <div className={`w-1.5 h-1.5 rounded-full ${socketStatus === 'connected' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">{playerName}</span>
+              </div>
+            </div>
           </div>
 
-          {/* Right: Action Buttons */}
-          <div className="grid grid-cols-2 gap-4">
-            <Button label="A" input="KeyZ" color="bg-emerald-600" />
-            <Button label="B" input="KeyX" color="bg-emerald-600" />
-            <Button label="C" input="KeyC" color="bg-emerald-600" />
-            <Button label="D" input="KeyV" color="bg-emerald-600" />
+          {/* Right Side: Action Buttons */}
+          <div className="relative w-56 h-56 flex items-center justify-center">
+            <div className="absolute inset-0 bg-zinc-900/50 rounded-full border border-zinc-800/50" />
+            <div className="relative z-10 grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-4 translate-y-4">
+                <Button label="C" input="KeyC" color="bg-yellow-500/80" size="w-16 h-16" />
+                <Button label="A" input="KeyZ" color="bg-red-500/80" size="w-16 h-16" />
+              </div>
+              <div className="flex flex-col gap-4 -translate-y-4">
+                <Button label="D" input="KeyV" color="bg-emerald-500/80" size="w-16 h-16" />
+                <Button label="B" input="KeyX" color="bg-blue-500/80" size="w-16 h-16" />
+              </div>
+            </div>
+          </div>
+
+          {/* Shoulder Buttons (Simulated areas at top corners) */}
+          <div className="absolute top-0 left-0 w-32 h-12 bg-zinc-900/20 rounded-br-3xl border-b border-r border-zinc-800/30 flex items-center justify-center">
+            <span className="text-[8px] font-black uppercase tracking-widest text-zinc-700">L-Shoulder</span>
+          </div>
+          <div className="absolute top-0 right-0 w-32 h-12 bg-zinc-900/20 rounded-bl-3xl border-b border-l border-zinc-800/30 flex items-center justify-center">
+            <span className="text-[8px] font-black uppercase tracking-widest text-zinc-700">R-Shoulder</span>
           </div>
         </div>
       )}

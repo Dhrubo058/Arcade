@@ -40,6 +40,62 @@ height:100%;
 <div id="game"></div>
 
 <script>
+// Virtual Gamepad Simulation System
+(function() {
+  const virtualGamepads = [null, null, null, null];
+  const buttonStates = Array.from({ length: 4 }, () => Array(17).fill(false));
+  
+  function createGamepad(index) {
+    return {
+      id: 'Virtual Gamepad ' + (index + 1),
+      index: index,
+      connected: true,
+      timestamp: performance.now(),
+      mapping: 'standard',
+      axes: [0, 0, 0, 0],
+      buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })),
+    };
+  }
+
+  const originalGetGamepads = navigator.getGamepads.bind(navigator);
+  navigator.getGamepads = function() {
+    const realGamepads = originalGetGamepads();
+    const result = Array.from(realGamepads || [null, null, null, null]);
+    for (let i = 0; i < 4; i++) {
+      if (virtualGamepads[i]) {
+        const gp = virtualGamepads[i];
+        gp.timestamp = performance.now();
+        for (let b = 0; b < 17; b++) {
+          gp.buttons[b].pressed = buttonStates[i][b];
+          gp.buttons[b].value = buttonStates[i][b] ? 1 : 0;
+        }
+        result[i] = gp;
+      }
+    }
+    return result;
+  };
+
+  window.addEventListener('message', (event) => {
+    if (event.data.type === 'VIRTUAL_GAMEPAD_UPDATE') {
+      const { playerIndex, buttonIndex, state } = event.data;
+      if (playerIndex !== undefined && playerIndex < 4) {
+        if (!virtualGamepads[playerIndex]) {
+          virtualGamepads[playerIndex] = createGamepad(playerIndex);
+          const connectEvent = new Event('gamepadconnected');
+          Object.defineProperty(connectEvent, 'gamepad', { value: virtualGamepads[playerIndex], enumerable: true });
+          window.dispatchEvent(connectEvent);
+        }
+        if (buttonIndex !== undefined && buttonIndex < 17) {
+          buttonStates[playerIndex][buttonIndex] = (state === 'down');
+        }
+      }
+    }
+  });
+
+  function update() { requestAnimationFrame(update); }
+  update();
+  console.log('Virtual Gamepad System Initialized');
+})();
 
 function getParam(name){
  const params = new URLSearchParams(window.location.search);
