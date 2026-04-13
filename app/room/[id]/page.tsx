@@ -1,296 +1,283 @@
 "use client";
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import socket from '@/src/lib/socket';
-import { Gamepad2, Users, Play, ChevronLeft, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { ChevronLeft, Users, Gamepad2, Play } from 'lucide-react';
+
+interface Player { id: string; name: string; isOp: boolean; }
+interface Game   { name: string; filename: string; slug: string; image?: string | null; }
 
 export default function RoomPage() {
-  const { id: roomId } = useParams();
+  const { id: roomId } = useParams<{ id: string }>();
   const router = useRouter();
-  const [players, setPlayers] = useState<any[]>([]);
-  const [games, setGames] = useState<any[]>([]);
-  const [showGamePicker, setShowGamePicker] = useState(false);
-  const [isHost, setIsHost] = useState(false);
-  const [gameSelected, setGameSelected] = useState<any>(null);
-  const [appUrl, setAppUrl] = useState('');
-  const [socketStatus, setSocketStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+
+  const [players,      setPlayers]      = useState<Player[]>([]);
+  const [games,        setGames]        = useState<Game[]>([]);
+  const [showPicker,   setShowPicker]   = useState(false);
+  const [isHost,       setIsHost]       = useState(false);
+  const [gameSelected, setGameSelected] = useState<Game | null>(null);
+  const [appUrl,       setAppUrl]       = useState('');
+  const [status,       setStatus]       = useState<'connected'|'connecting'|'disconnected'>('disconnected');
+
+  const controllerUrl = `${appUrl}/controller/${roomId}`;
 
   useEffect(() => {
-    const fetchGames = async () => {
-      try {
-        const res = await fetch('/api/games');
-        const data = await res.json();
-        setGames(data);
-      } catch (err) {
-        console.error('Failed to fetch games:', err);
-      }
-    };
-    fetchGames();
+    fetch('/api/games').then(r => r.json()).then(setGames).catch(() => {});
   }, []);
 
   useEffect(() => {
     setAppUrl(window.location.origin);
-    
-    const updateStatus = () => {
-      if (socket.connected) setSocketStatus('connected');
-      else if (socket.active) setSocketStatus('connecting');
-      else setSocketStatus('disconnected');
-    };
+  }, []);
 
-    const fetchRoomInfo = () => {
-      socket.emit('get-room-info', roomId, (response: any) => {
-        if (response.success) {
-          setPlayers(response.players);
-          setGameSelected(response.game);
-        } else {
-          router.push('/');
-        }
+  useEffect(() => {
+    const updateStatus = () => setStatus(
+      socket.connected ? 'connected' : socket.active ? 'connecting' : 'disconnected'
+    );
+
+    const onConnect = () => {
+      updateStatus();
+      socket.emit('get-room-info', roomId, (res: any) => {
+        if (res.success) { setPlayers(res.players); if (res.game) setGameSelected(res.game); }
+        setIsHost(true);
       });
     };
 
-    socket.on('connect', () => {
-      updateStatus();
-      fetchRoomInfo();
-    });
-    socket.on('disconnect', updateStatus);
+    setIsHost(true);
+    socket.on('connect',       onConnect);
+    socket.on('disconnect',    updateStatus);
     socket.on('connect_error', updateStatus);
+    if (!socket.connected) socket.connect(); else onConnect();
 
-    if (!socket.connected) {
-      socket.connect();
-    } else {
-      updateStatus();
-      fetchRoomInfo();
-    }
-
-    socket.on('player-joined', (updatedPlayers) => {
-      setPlayers(updatedPlayers);
-    });
-
-    socket.on('player-left', (updatedPlayers) => {
-      setPlayers(updatedPlayers);
-    });
-
-    socket.on('game-selected', (game) => {
-      setGameSelected(game);
-    });
-
-    socket.on('game-started', (game) => {
-      router.push(`/play?rom=${game.filename}&room=${roomId}`);
-    });
-
-    socket.on('room-closed', () => {
-      alert('Room closed by host');
-      router.push('/');
-    });
+    socket.on('player-joined', (p: Player[]) => setPlayers(p));
+    socket.on('player-left',   (p: Player[]) => setPlayers(p));
+    socket.on('game-selected', (g: Game)     => setGameSelected(g));
+    socket.on('room-closed',   ()            => router.push('/'));
+    socket.on('kicked',        ()            => router.push('/'));
 
     return () => {
+      socket.off('connect',       onConnect);
+      socket.off('disconnect',    updateStatus);
+      socket.off('connect_error', updateStatus);
       socket.off('player-joined');
       socket.off('player-left');
       socket.off('game-selected');
-      socket.off('game-started');
       socket.off('room-closed');
+      socket.off('kicked');
     };
   }, [roomId, router]);
 
-  const handleSelectGame = (game: any) => {
+  const handleSelectGame = useCallback((game: Game) => {
     socket.emit('select-game', { roomId, game });
-    setShowGamePicker(false);
-  };
+    setGameSelected(game);
+    setShowPicker(false);
+  }, [roomId]);
 
-  const handleStartGame = () => {
-    if (gameSelected) {
-      socket.emit('start-game', { roomId });
-    } else {
-      setShowGamePicker(true);
-    }
-  };
+  const handleStartGame = useCallback(() => {
+    if (!gameSelected) { setShowPicker(true); return; }
+    socket.emit('start-game', { roomId });
+    router.push(`/play?rom=${gameSelected.filename}&room=${roomId}`);
+  }, [gameSelected, roomId, router]);
 
-  const controllerUrl = `${appUrl}/controller/${roomId}`;
+  const kickPlayer = useCallback((id: string) => {
+    socket.emit('kick-player', { roomId, playerId: id });
+  }, [roomId]);
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-4 md:p-8 flex flex-col">
-      {/* Game Picker Modal */}
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+
+      {/* ── Game Picker Modal ── */}
       <AnimatePresence>
-        {showGamePicker && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+        {showPicker && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 md:p-8"
           >
-            <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_100px_rgba(0,0,0,0.5)]">
-              <div className="p-8 border-b border-zinc-800 flex items-center justify-between">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-[40px] w-full max-w-5xl max-h-[90dvh] flex flex-col overflow-hidden">
+              <div className="p-6 md:p-8 border-b border-zinc-800 flex items-center justify-between flex-shrink-0">
                 <div>
-                  <h2 className="text-3xl font-black italic uppercase tracking-tighter">Select Mission</h2>
-                  <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-1">Choose a game to play with your squad</p>
+                  <h2 className="text-2xl md:text-3xl font-black italic uppercase tracking-tighter">Select Mission</h2>
+                  <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mt-1">Choose a game to play</p>
                 </div>
-                <button 
-                  onClick={() => setShowGamePicker(false)}
-                  className="w-12 h-12 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center transition-colors"
-                >
+                <button onClick={() => setShowPicker(false)}
+                  className="w-10 h-10 bg-zinc-800 hover:bg-zinc-700 rounded-full flex items-center justify-center transition-colors text-lg">
                   ✕
                 </button>
               </div>
-              
-              <div className="flex-1 overflow-y-auto p-8">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                  {games.map((game) => (
-                    <button
-                      key={game.slug}
-                      onClick={() => handleSelectGame(game)}
-                      className="group flex flex-col text-left"
-                    >
-                      <div className="aspect-[3/4] bg-black rounded-2xl mb-3 overflow-hidden relative border-2 border-transparent group-hover:border-emerald-500 transition-all shadow-lg">
-                        {game.image ? (
-                          <img src={game.image} alt={game.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs text-zinc-700 font-black uppercase tracking-widest p-4 text-center">
-                            {game.name}
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                      <p className="text-xs font-black italic uppercase tracking-tighter truncate group-hover:text-emerald-500 transition-colors">{game.name}</p>
-                    </button>
-                  ))}
-                </div>
+              <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                {games.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-600 font-bold uppercase tracking-widest text-sm">
+                    No games found — upload ROMs via /admin
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+                    {games.map(game => (
+                      <button
+                        key={game.filename}
+                        type="button"
+                        onClick={() => handleSelectGame(game)}
+                        className="group flex flex-col text-left focus:outline-none"
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        <div className="aspect-[3/4] bg-black rounded-2xl mb-2 overflow-hidden relative border-2 transition-all duration-200"
+                          style={{ borderColor: gameSelected?.filename === game.filename ? '#10b981' : 'transparent', boxShadow: gameSelected?.filename === game.filename ? '0 0 20px rgba(16,185,129,0.3)' : 'none' }}>
+                          {game.image ? (
+                            <img src={game.image} alt={game.name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 pointer-events-none" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-zinc-700 font-black uppercase tracking-widest text-[10px] p-3 text-center">
+                              {game.name}
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                          {gameSelected?.filename === game.filename && (
+                            <div className="absolute top-2 right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-black text-xs font-black pointer-events-none">✓</div>
+                          )}
+                        </div>
+                        <p className="text-[11px] font-black italic uppercase tracking-tighter truncate group-hover:text-emerald-500 transition-colors w-full">
+                          {game.name}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <header className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8 md:mb-12">
-        <button 
-          onClick={() => router.push('/')}
-          className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] md:text-xs"
-        >
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between gap-4 px-4 md:px-8 py-4 border-b border-zinc-900 flex-shrink-0">
+        <button onClick={() => router.push('/')}
+          className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors font-bold uppercase tracking-widest text-[10px] md:text-xs">
           <ChevronLeft className="w-4 h-4" />
-          Back to Dashboard
+          Back
         </button>
         <div className="flex items-center gap-3">
-          <div className="hidden xs:flex items-center gap-2 px-3 py-1 bg-black/40 border border-zinc-800 rounded-full mr-2 md:mr-4">
-            <div className={`w-2 h-2 rounded-full ${
-              socketStatus === 'connected' ? 'bg-emerald-500' : 
-              socketStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-            }`} />
-            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
-              {socketStatus}
-            </span>
+          <div className="flex items-center gap-2 px-3 py-1 bg-black/40 border border-zinc-800 rounded-full">
+            <div className={`w-2 h-2 rounded-full ${status === 'connected' ? 'bg-emerald-500' : status === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{status}</span>
           </div>
-          <div className="w-8 h-8 bg-emerald-500 rounded flex items-center justify-center">
-            <Users className="w-5 h-5 text-black" />
+          <div className="w-7 h-7 bg-emerald-500 rounded flex items-center justify-center">
+            <Users className="w-4 h-4 text-black" />
           </div>
-          <h1 className="text-lg md:text-xl font-black italic tracking-tighter uppercase">Multiplayer Lobby</h1>
+          <h1 className="text-base md:text-lg font-black italic tracking-tighter uppercase">Multiplayer Lobby</h1>
         </div>
-        <div className="hidden sm:block w-24" />
+        <div className="w-16 hidden sm:block" />
       </header>
 
-      <main className="flex-1 grid lg:grid-cols-2 gap-6 md:gap-12 max-w-6xl mx-auto w-full">
-        {/* Left Side: QR & Info */}
-        <section className="flex flex-col items-center justify-center bg-zinc-900/50 border border-zinc-800 rounded-[40px] p-6 md:p-12 text-center relative overflow-hidden">
-          {gameSelected && (
-            <div className="absolute inset-0 opacity-10 pointer-events-none">
-              {gameSelected.image && <img src={gameSelected.image} alt="" className="w-full h-full object-cover blur-xl" />}
-            </div>
-          )}
-          
-          <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter uppercase mb-2 relative z-10">Join the Game</h2>
-          <p className="text-zinc-500 mb-6 md:mb-8 text-[10px] md:text-sm font-bold uppercase tracking-widest relative z-10">Scan with your phone to use as a controller</p>
-          
-          <div className="p-4 md:p-6 bg-white rounded-[40px] mb-6 md:mb-8 shadow-[0_0_50px_rgba(255,255,255,0.1)] relative z-10">
-            <QRCodeSVG value={controllerUrl} size={180} className="md:w-[256px] md:h-[256px]" level="H" />
-          </div>
-
-          <div className="bg-black/50 px-4 md:px-6 py-2 md:py-3 rounded-2xl border border-zinc-800 mb-6 md:mb-8 relative z-10">
-            <span className="text-zinc-500 text-[10px] md:text-xs font-bold uppercase tracking-widest mr-2 md:mr-3">Room ID:</span>
-            <span className="text-xl md:text-2xl font-black text-emerald-500 tracking-widest">{roomId}</span>
-          </div>
-
-          <p className="text-zinc-500 text-[10px] md:text-xs max-w-xs leading-relaxed relative z-10">
-            Up to 4 players can join. The first player to join becomes the OP and can select games from their phone.
-          </p>
-        </section>
-
-        {/* Right Side: Players & Actions */}
-        <section className="flex flex-col">
-          <div className="flex-1 bg-zinc-900/50 border border-zinc-800 rounded-[40px] p-6 md:p-8 mb-4 md:mb-6">
-            <div className="flex items-center justify-between mb-6 md:mb-8">
-              <h3 className="text-lg md:text-xl font-black italic tracking-tighter uppercase flex items-center gap-3">
-                <Users className="w-5 h-5 text-emerald-500" />
-                Players ({players.length}/4)
-              </h3>
-              {gameSelected && (
-                <div className="flex items-center gap-3 bg-black/40 px-4 py-2 rounded-2xl border border-zinc-800">
-                  <div className="w-8 h-8 bg-zinc-800 rounded-lg overflow-hidden">
-                    {gameSelected.image && <img src={gameSelected.image} alt="" className="w-full h-full object-cover" />}
-                  </div>
-                  <span className="text-[10px] font-black italic uppercase tracking-tighter text-emerald-500">{gameSelected.name}</span>
-                </div>
+      {/* ── Selected game banner — center prominence ── */}
+      <AnimatePresence>
+        {gameSelected && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="flex-shrink-0 relative overflow-hidden">
+            {gameSelected.image && (
+              <img src={gameSelected.image} alt="" className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-20 pointer-events-none scale-110" />
+            )}
+            <div className="relative z-10 flex items-center justify-center gap-4 py-3 px-4 border-b border-zinc-800">
+              {gameSelected.image && (
+                <img src={gameSelected.image} alt={gameSelected.name} className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+              )}
+              <div className="text-center">
+                <p className="text-[9px] font-black uppercase tracking-widest text-emerald-500 mb-0.5">Selected Game</p>
+                <p className="text-base md:text-lg font-black italic uppercase tracking-tighter">{gameSelected.name}</p>
+              </div>
+              {isHost && (
+                <button onClick={() => setShowPicker(true)}
+                  className="text-[10px] text-zinc-500 hover:text-white border border-zinc-700 hover:border-zinc-500 px-3 py-1 rounded-full transition-colors font-bold uppercase tracking-widest">
+                  Change
+                </button>
               )}
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            <div className="space-y-3 md:space-y-4">
+      {/* ── Main grid ── */}
+      <main className="flex-1 grid lg:grid-cols-2 gap-4 md:gap-8 max-w-6xl mx-auto w-full p-4 md:p-8">
+
+        {/* Left: QR */}
+        <section className="flex flex-col items-center justify-center bg-zinc-900/50 border border-zinc-800 rounded-[32px] p-6 md:p-10 text-center relative overflow-hidden">
+          <h2 className="text-xl md:text-2xl font-black italic tracking-tighter uppercase mb-1 relative z-10">Join the Game</h2>
+          <p className="text-zinc-500 mb-5 text-[10px] font-bold uppercase tracking-widest relative z-10">Scan with your phone to use as controller</p>
+
+          <div className="p-4 md:p-5 bg-white rounded-[28px] mb-5 relative z-10">
+            {appUrl && <QRCodeSVG value={controllerUrl} size={168} level="H" />}
+          </div>
+
+
+
+          <div className="bg-black/50 px-4 py-2 rounded-2xl border border-zinc-800 relative z-10">
+            <span className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mr-2">Room ID:</span>
+            <span className="text-xl font-black text-emerald-500 tracking-widest">{roomId}</span>
+          </div>
+        </section>
+
+        {/* Right: Players + actions */}
+        <section className="flex flex-col">
+          <div className="flex-1 bg-zinc-900/50 border border-zinc-800 rounded-[32px] p-5 md:p-8 mb-4">
+            <div className="flex items-center gap-3 mb-5">
+              <Users className="w-5 h-5 text-emerald-500" />
+              <h3 className="text-base md:text-lg font-black italic tracking-tighter uppercase">Players ({players.length}/4)</h3>
+            </div>
+
+            <div className="space-y-3">
               <AnimatePresence>
-                {players.map((player, index) => (
-                  <motion.div
-                    key={player.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 20 }}
-                    className="flex items-center justify-between p-3 md:p-4 bg-black/40 border border-zinc-800 rounded-2xl"
-                  >
-                    <div className="flex items-center gap-3 md:gap-4">
-                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-black text-sm md:text-base ${
-                        player.isOp ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-400'
-                      }`}>
-                        {index + 1}
+                {players.map((player, idx) => (
+                  <motion.div key={player.id}
+                    initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}
+                    className="flex items-center justify-between p-3 bg-black/40 border border-zinc-800 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${player.isOp ? 'bg-emerald-500 text-black' : 'bg-zinc-800 text-zinc-400'}`}>
+                        {idx + 1}
                       </div>
                       <div>
-                        <p className="text-sm md:text-base font-black italic uppercase tracking-tighter flex items-center gap-2">
+                        <p className="text-sm font-black italic uppercase tracking-tighter flex items-center gap-2">
                           {player.name}
-                          {player.isOp && (
-                            <span className="text-[8px] font-black bg-emerald-500 text-black px-1.5 py-0.5 rounded uppercase tracking-widest">OP</span>
-                          )}
+                          {player.isOp && <span className="text-[8px] font-black bg-emerald-500 text-black px-1.5 py-0.5 rounded">OP</span>}
                         </p>
-                        <p className="text-[8px] md:text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
-                          Controller / Player {index + 1}
-                        </p>
+                        <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest">P{idx + 1}</p>
                       </div>
                     </div>
-                    <span className="text-[8px] md:text-[10px] font-black text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-widest">Online</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded uppercase tracking-widest">Online</span>
+                      {isHost && !player.isOp && (
+                        <button onClick={() => kickPlayer(player.id)}
+                          className="text-[9px] font-bold text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-400/40 px-2 py-0.5 rounded uppercase tracking-widest transition-colors">
+                          Kick
+                        </button>
+                      )}
+                    </div>
                   </motion.div>
                 ))}
               </AnimatePresence>
-              
+
               {Array.from({ length: 4 - players.length }).map((_, i) => (
-                <div key={`empty-${i}`} className="p-3 md:p-4 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center">
-                  <span className="text-zinc-700 text-[8px] md:text-[10px] font-black uppercase tracking-widest">Waiting for player...</span>
+                <div key={i} className="p-3 border border-dashed border-zinc-800 rounded-2xl flex items-center justify-center">
+                  <span className="text-zinc-700 text-[9px] font-black uppercase tracking-widest">Waiting for player...</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:gap-4">
-            <button 
-              onClick={() => setShowGamePicker(true)}
-              className="flex items-center justify-center gap-2 p-3 md:p-5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-2xl text-xs md:text-base font-black italic uppercase tracking-tighter transition-all"
-            >
-              <Gamepad2 className="w-4 h-4 md:w-5 md:h-5" />
-              Select Game
-            </button>
-            <button 
-              onClick={handleStartGame}
-              disabled={players.length < 1}
-              className="flex items-center justify-center gap-2 p-3 md:p-5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl text-xs md:text-base font-black italic uppercase tracking-tighter transition-all shadow-[0_0_30px_rgba(16,185,129,0.2)]"
-            >
-              <Play className="w-4 h-4 md:w-5 md:h-5 fill-current" />
-              Start Mission
-            </button>
-          </div>
+          {isHost && (
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => setShowPicker(true)}
+                className="flex items-center justify-center gap-2 p-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-2xl text-sm font-black italic uppercase tracking-tighter transition-all">
+                <Gamepad2 className="w-4 h-4" />
+                {gameSelected ? 'Change Game' : 'Select Game'}
+              </button>
+              <button onClick={handleStartGame}
+                disabled={players.length < 1}
+                className="flex items-center justify-center gap-2 p-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-black rounded-2xl text-sm font-black italic uppercase tracking-tighter transition-all"
+                style={{ boxShadow: players.length > 0 ? '0 0 24px rgba(16,185,129,0.25)' : 'none' }}>
+                <Play className="w-4 h-4 fill-current" />
+                Start Game
+              </button>
+            </div>
+          )}
         </section>
       </main>
     </div>
